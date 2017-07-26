@@ -33,7 +33,7 @@ import org.jnativehook.GlobalScreen
 
 
 /**
- * Created by hooge on 7/23/2017.
+ * The bulk of the actual 'bot', as in mouse movents, clicking, is done here.
  */
 class RoboHog : Board, NativeMouseInputListener
 
@@ -46,7 +46,9 @@ class RoboHog : Board, NativeMouseInputListener
 
     val windowRgbs = intArrayOf(4531980, 4531980,13747845, 5646091,1534087)
 
-    // pieces as they appear, note index 7 = puffer, 8 = crab
+    // pieces as they appear, note index 7 = puffer, 8 = crab, 9 = jelly. This is how its done in the game sooo why break tradition.
+
+    // The crab is 0 for non bilged pieces, cause I haven't been able to observe it.
     val pieces = intArrayOf(-11026955 ,-12875882, -15087373,-7806267,-15103798,-16611917,-16286997,-331196, 0, -16711704)
     val piecesBilged = intArrayOf(-14452285,-15178851,-16089662,-13203536,-16096334,-16458548,-16556353,-10187140,-15054981,  -16739394 )
 
@@ -311,6 +313,14 @@ class RoboHog : Board, NativeMouseInputListener
         return mouseGlide(currentMouseX, currentMouseY, xPos, yPos, (rand.nextInt(250-150)+1)+150, 20)
     }
 
+    /**
+     * Fancy method of gliding the mouse in a arc (based off perfect circle)
+     *
+     * @TODO there is currently a bug where the mouse loops the wrong way, it need's a check to reverse the start and stop angles.
+     *
+     * @TODO the circle isn't really human like and can be improved by making the source an oval, or by using a different method.
+     *      Then again it's a hell of a lot better than just going straight to it.
+     */
     suspend fun mouseGlide(x1: Int, y1: Int, x2: Int, y2: Int, t: Int, n: Int): Boolean {
         try {
             val dt = t / n.toDouble()
@@ -392,7 +402,7 @@ class RoboHog : Board, NativeMouseInputListener
         } catch (e: InterruptedException) {
             e.printStackTrace()
         }
-        return true;
+        return true
 
     }
 

@@ -17,10 +17,12 @@
 
 package awesome.sauce
 
+/**
+ *  Manages the GPU kernel and goes through all the results.
+ */
 class HogBotGPU {
 
 
-    // Pool of encoded move information
 
 
 
@@ -29,7 +31,7 @@ class HogBotGPU {
     private var latestMove: HogBotGPUKernel.HighLevelResult? = null
     private var latestReccomendation: HogBotLib.Coordinate? = null
 
-    val passes = 3;
+    val passes = 3
 
     fun getLatest(): HogBotLib.Coordinate?
     {
@@ -157,8 +159,6 @@ class HogBotGPU {
         {
             System.out.println("Move $i: " + bestResult.moveInfo[i].x + " " + bestResult.moveInfo[i].y)
         }
-
-
 
 
 

@@ -18,7 +18,7 @@
 package awesome.sauce
 
 /**
- * Created by hooge on 7/24/2017.
+ * Interface for receiving pieces from some board.
  */
 interface Board {
 

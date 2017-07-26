@@ -22,7 +22,11 @@ import java.io.PrintStream;
 
 
 /**
- * Created by hooge on 7/20/2017.
+ * At one point contained alot of useful functions.
+ *
+ * Since referencing stuff outside the Kernel's class is iffy, I ended up just keeping everything there.
+ *
+ * As such, the only things used here is the static coordinate class.
  */
 public class HogBotLib {
     public static class Coordinate

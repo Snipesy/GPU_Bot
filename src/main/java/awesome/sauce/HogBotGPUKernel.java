@@ -24,13 +24,29 @@ import com.aparapi.Range;
 import java.util.ArrayList;
 
 /**
- * Created by hooge on 7/21/2017.
- *
  * The Mother of this entire program.
  *
- * Works using a divide and conquer strategy.
+ * Works using a sort of divide and conquer strategy.
  *
- * It exploits the 3d range to pick the first few moves.
+ * It divides the board into MAX_MOVES_PER_BOARD^N.
+ *
+ * Where N is the level of divergence.
+ *
+ * Each of those boards uses a predetermined starting combination.
+ * (A level of divergence of 2 will have 2 starting combinations)
+ *
+ * after those first 2 predetermined moves are done, a different algorithim solves the remaining mooves (MAX_POSSIBLE_DEPTH)
+ *
+ *
+ * @TODO Possible methods of improvements.
+ *
+ * A big loss of the bot's potential is it does not consider double moves.
+ *
+ * Instead of simply returning when a swap is detected (scoring it, and going on, etc).
+ * It should rank the board, as normal, but continue going forward and see if any new moves can be done on the board post-break.
+ *
+ * This means some code needs to be written which will take a board, and do all the necessary swaps to make it turn into the board post-break.
+ * And it needs to be done without drastically decreasing performance.
  *
  *
  */
@@ -38,6 +54,8 @@ public class HogBotGPUKernel extends Kernel {
 
     // These parameters are pretty important.
     // Decreasing one or the other will significantly decrease memory use (at cost of losing a level of depth)
+    // Note a level of divergence of 3 is really buggy. Not sure why.
+    // @TODO fix the 3 level divergence bug. I think it's complicated JIT compiler bugs, so easier said than done.
     final int LEVELS_OF_DIVERGENCE = 2;
 
     final int MAX_POSSIBLE_DEPTH = 3;
@@ -262,18 +280,19 @@ public class HogBotGPUKernel extends Kernel {
         final int N = getGlobalArrayIndex();
 
 
-
-
-        /**
-         * Phase 1, Diverge.
-         */
-
         // Copy original set to buffer.
         copySourceToLocalBuffer(P);
 
         initThis(N,P);
 
         initialiseConstraint(N,P);
+
+
+
+        /**
+         * Phase 1, Diverge.
+         */
+
 
 
 
@@ -414,17 +433,18 @@ public class HogBotGPUKernel extends Kernel {
         return false;
     }
 
-    private int decodeMoveX(int move, int N)
-    {
-        return (N % MAX_POSSIBLE_WIDTH-1);
-    }
-
-    private int decodeMoveY(int move, int N)
-    {
-        return (N / MAX_POSSIBLE_WIDTH-1);
-    }
 
 
+    /**
+     * copies source to local buffer.
+     *
+     * Itried to make a boolean switch which would say whether or not this is already set
+     * I then had the swaps reversed to restore the local buffer to normal.
+     *
+     * But, absolutely no performacne was gained. Which means the JIT compiler catches this, or I missed something.
+     *
+     * @param P
+     */
     private void copySourceToLocalBuffer(int P)
     {
         for (int i = 0; i < BOARD_SIZE; i++)
@@ -746,7 +766,6 @@ public class HogBotGPUKernel extends Kernel {
     /**
      * Ranks the board assuming the coords would cause a pop.
      *
-     * Needs to do
      * @param x
      * @param y
      */

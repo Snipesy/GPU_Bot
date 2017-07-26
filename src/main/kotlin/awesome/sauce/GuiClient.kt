@@ -42,7 +42,9 @@ import java.awt.event.WindowEvent
 
 
 /**
- * Created by hooge on 7/23/2017.
+ * Very simple gui client.
+ *
+ * The gpuj depth options ,device selection, etc, don't actaully do anything right now.
  */
 class GuiClient : ClientCallbackListener, NativeKeyListener {
 
@@ -68,8 +70,6 @@ class GuiClient : ClientCallbackListener, NativeKeyListener {
         val guiFrame = JFrame()
 
 
-
-        //make sure the program exits when the frame closes
         guiFrame.defaultCloseOperation = JFrame.EXIT_ON_CLOSE
 
         guiFrame.addWindowListener(object : WindowAdapter() {
@@ -108,7 +108,6 @@ class GuiClient : ClientCallbackListener, NativeKeyListener {
 
         statusTextArea.background = guiFrame.background
 
-        //This will center the JFrame in the middle of the screen
         guiFrame.setLocationRelativeTo(null)
 
         val comboPanel = JPanel()
@@ -169,13 +168,11 @@ class GuiClient : ClientCallbackListener, NativeKeyListener {
 
 
 
-        //The JFrame uses the BorderLayout layout manager.
 
         guiFrame.add(startStopButton, BorderLayout.PAGE_END)
         guiFrame.add(comboPanel, BorderLayout.PAGE_START)
         guiFrame.add(statusTextArea, BorderLayout.CENTER)
 
-        //make sure the JFrame is visible
         guiFrame.isVisible = true
 
 
@@ -286,9 +283,6 @@ class GuiClient : ClientCallbackListener, NativeKeyListener {
 
     companion object {
 
-        //Note: Typically the main method will be in a
-        //separate class. As this is a simple one class
-        //example it's all in the one class.
         @JvmStatic fun main(args: Array<String>) {
 
             val client = GuiClient()

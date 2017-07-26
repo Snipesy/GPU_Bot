@@ -21,7 +21,9 @@ import kotlinx.coroutines.experimental.CancellationException
 import kotlinx.coroutines.experimental.delay
 
 /**
- * Created by hooge on 7/21/2017.
+ * Used to be the entry point, but now a gui calls for it.
+ * Does some simply looping to keep the bot (RoboHog) rolling.
+ * Also manages update sback to the GUI.
  */
 object MainClient {
     suspend fun main(cb: ClientCallbackListener) {
