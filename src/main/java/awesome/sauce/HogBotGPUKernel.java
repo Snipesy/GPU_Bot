@@ -41,6 +41,7 @@ import java.util.LinkedHashSet;
  *
  * after those first 2 predetermined moves are done, a different algorithim solves the remaining mooves (MAX_POSSIBLE_DEPTH)
  *
+ * @TODO Add ability to abort the execution. I'm not sure how well it would work.
  *
  * @TODO Possible methods of improvements.
  *
