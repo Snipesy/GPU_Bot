@@ -17,16 +17,16 @@
 
 package awesome.sauce
 
+import com.aparapi.device.OpenCLDevice
+
 /**
  *  Manages the GPU kernel and goes through all the results.
  */
-class HogBotGPU {
+class HogBotGPU(abstraction: Int, depth: Int, device: OpenCLDevice?) {
 
 
 
-
-
-    val kernel = HogBotGPUKernel()
+    val kernel = HogBotGPUKernel(abstraction,depth, device)
 
     private var latestMove: HogBotGPUKernel.HighLevelResult? = null
     private var latestReccomendation: HogBotLib.Coordinate? = null

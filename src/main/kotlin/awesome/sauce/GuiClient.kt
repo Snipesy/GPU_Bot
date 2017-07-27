@@ -56,7 +56,6 @@ class GuiClient : ClientCallbackListener, NativeKeyListener {
 
     var botJob: Job? = null
 
-    var startStopButton: JButton
 
     var statusTextArea: JTextPane
 
@@ -65,6 +64,81 @@ class GuiClient : ClientCallbackListener, NativeKeyListener {
     val buttonStartMessage = "START (CTRL 2)"
 
     val buttonErrorMessage = "Error"
+
+    val abstractionLayers2 = JComboBox(gpu_depth_options)
+
+    val abstractionLayers = JComboBox(gpu_abstraction_layers)
+
+    val startStopButton = JButton(buttonStopMessage)
+
+    var mDevices: List<OpenCLDevice>? = null
+
+
+
+    val deviceSelector  = try {
+        val devices = OpenCLDevice.listDevices(Device.TYPE.GPU)
+
+
+
+
+
+        val cpus = OpenCLDevice.listDevices(Device.TYPE.CPU)
+
+
+
+
+        devices.addAll(cpus)
+
+
+
+
+
+        devices!!.forEach {
+            System.out.println("Device: " + it.name)
+        }
+
+        if (devices.isEmpty())
+            throw Exception("No devices")
+
+        mDevices = devices
+
+        val devMap = devices.map {it.name}.toMutableList()
+
+        devMap.add("CPU (JTP)")
+
+        abstractionLayers.selectedIndex = 1
+
+        abstractionLayers2.selectedIndex = 2
+
+        val initialDevice = 0
+
+
+
+        botJob = launch(CommonPool)
+        {
+            val devs = mDevices
+            if (devs == null)
+            {
+                // Do nothing
+            }
+            else
+                MainClient.main(mContext, abstractionLayers.selectedIndex+1, abstractionLayers2.selectedIndex+1, devs[initialDevice])
+        }
+
+
+        JComboBox(devMap.toTypedArray())
+
+    }
+    catch (e: UnsatisfiedLinkError)
+    {
+
+        statusUpdate("Looks we don't have the proper tools. \nOpenCL or video drivers? 64 bit Java?")
+
+        startStopButton.text = buttonErrorMessage
+
+        JComboBox(arrayOf("None"))
+    }
+
 
     init {
         val guiFrame = JFrame()
@@ -91,7 +165,7 @@ class GuiClient : ClientCallbackListener, NativeKeyListener {
         guiFrame.minimumSize = Dimension(500,135)
         guiFrame.maximumSize = Dimension(500,135)
 
-        startStopButton = JButton(buttonStopMessage)
+
 
 
         startStopButton.addActionListener(object : ActionListener {
@@ -112,13 +186,13 @@ class GuiClient : ClientCallbackListener, NativeKeyListener {
 
         val comboPanel = JPanel()
         val comboLbl = JLabel("Abstraction")
-        val abstractionLayers = JComboBox(gpu_abstraction_layers)
+
 
         comboPanel.add(comboLbl)
         comboPanel.add(abstractionLayers)
 
         val comboLbl2 = JLabel("GPU Depth")
-        val abstractionLayers2 = JComboBox(gpu_depth_options)
+
 
 
         val comboLbl3 = JLabel("Compute Device")
@@ -128,38 +202,8 @@ class GuiClient : ClientCallbackListener, NativeKeyListener {
         comboPanel.add(abstractionLayers2)
 
 
-        val deviceSelector  = try {
-            val devices = OpenCLDevice.listDevices(Device.TYPE.GPU)
 
 
-
-            devices.forEach {
-                System.out.println("Device: " + it.name)
-            }
-
-            val devMap = devices.map {it.name}.toMutableList()
-            devMap.add("CPU")
-
-
-
-            botJob = launch(CommonPool)
-            {
-                MainClient.main(mContext)
-            }
-
-
-            JComboBox(devMap.toTypedArray())
-
-        }
-        catch (e: UnsatisfiedLinkError)
-        {
-
-            statusUpdate("Looks we don't have the proper tools. \nOpenCL or video drivers? 64 bit Java?")
-
-            startStopButton.text = buttonErrorMessage
-
-            JComboBox(arrayOf("None"))
-        }
 
 
         comboPanel.add(comboLbl3)
@@ -183,6 +227,8 @@ class GuiClient : ClientCallbackListener, NativeKeyListener {
 
     }
 
+    val waitingMessage = "Waiting for closure (Click again to abort)"
+
     fun startStopButtonPushed()
     {
         if (startStopButton.text == buttonErrorMessage)
@@ -193,27 +239,42 @@ class GuiClient : ClientCallbackListener, NativeKeyListener {
             }
             return
         }
-        if (botJob == null)
-        {
-            startStopButton.text = buttonStartMessage
-        }
-        else
+        else if (startStopButton.text == buttonStartMessage)
         {
             botJob?.cancel()
             runBlocking {
+                val tmp = startStopButton.text
+                startStopButton.text = "Please wait..."
+
+                startStopButton.repaint()
                 botJob?.join()
+                startStopButton.text = tmp
             }
 
             if (startStopButton.text == buttonStartMessage)
             {
                 botJob = launch(CommonPool)
                 {
-                    MainClient.main(mContext)
+                    val devs = mDevices
+                    if (devs == null)
+                    {
+                        // Do nothing
+                    }
+                    else if (deviceSelector.selectedIndex == devs.size)
+                        MainClient.main(mContext, abstractionLayers.selectedIndex+1, abstractionLayers2.selectedIndex+1, null)
+                    else
+                        MainClient.main(mContext, abstractionLayers.selectedIndex+1, abstractionLayers2.selectedIndex+1, devs[deviceSelector.selectedIndex])
                 }
+
                 startStopButton.text = buttonStopMessage
 
-
             }
+        }
+        else if (startStopButton.text == buttonStopMessage)
+        {
+            botJob?.cancel()
+
+
         }
     }
 

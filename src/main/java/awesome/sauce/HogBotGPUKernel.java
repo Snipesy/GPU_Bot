@@ -20,8 +20,12 @@ package awesome.sauce;
 
 import com.aparapi.Kernel;
 import com.aparapi.Range;
+import com.aparapi.device.Device;
+import com.aparapi.device.OpenCLDevice;
+import com.aparapi.internal.kernel.KernelManager;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 
 /**
  * The Mother of this entire program.
@@ -56,16 +60,46 @@ public class HogBotGPUKernel extends Kernel {
     // Decreasing one or the other will significantly decrease memory use (at cost of losing a level of depth)
     // Note a level of divergence of 3 is really buggy. Not sure why.
     // @TODO fix the 3 level divergence bug. I think it's complicated JIT compiler bugs, so easier said than done.
-    final int LEVELS_OF_DIVERGENCE = 2;
+    int LEVELS_OF_DIVERGENCE = 2;
 
-    final int MAX_POSSIBLE_DEPTH = 3;
+    int MAX_POSSIBLE_DEPTH = 3;
 
-    final int TOTAL_DEPTH = LEVELS_OF_DIVERGENCE + MAX_POSSIBLE_DEPTH;
+    int TOTAL_DEPTH = LEVELS_OF_DIVERGENCE + MAX_POSSIBLE_DEPTH;
 
 
 
-    public HogBotGPUKernel()
+    final int MAX_POSSIBLE_HEIGHT = 12;
+
+    final int MAX_POSSIBLE_WIDTH = 6;
+
+    final int MAX_SIZE_MOVES = (MAX_POSSIBLE_WIDTH - 1) * MAX_POSSIBLE_HEIGHT;
+
+    public final int boardsToSolve;
+
+    final int STACK_SPACE_FOR_EACH_LEVEL = 2;
+
+    int STACK_SIZE = MAX_POSSIBLE_DEPTH * STACK_SPACE_FOR_EACH_LEVEL;
+
+    final int BOARD_SIZE = MAX_POSSIBLE_HEIGHT * MAX_POSSIBLE_WIDTH;
+
+
+
+
+
+    public HogBotGPUKernel(int levels_of_divergence, int max_possible_depth, OpenCLDevice deviceIn)
     {
+        LEVELS_OF_DIVERGENCE = levels_of_divergence;
+
+        MAX_POSSIBLE_DEPTH = max_possible_depth;
+
+        TOTAL_DEPTH = LEVELS_OF_DIVERGENCE + MAX_POSSIBLE_DEPTH;
+
+        STACK_SIZE = MAX_POSSIBLE_DEPTH * STACK_SPACE_FOR_EACH_LEVEL;
+
+
+
+
+
         /**
          * The sizes are big enough to accept a worse case scenario.
          */
@@ -83,6 +117,25 @@ public class HogBotGPUKernel extends Kernel {
 
 
 
+
+        if (deviceIn != null)
+        {
+            System.out.println("Kernel starting with " + deviceIn.getName());
+            LinkedHashSet<Device> dSet = new LinkedHashSet<>();
+
+            dSet.add(deviceIn);
+
+            KernelManager.instance().setPreferredDevices(this, dSet);
+        }
+        else {
+            System.out.println("Kernel starting with JTP");
+
+           this.setExecutionModeWithoutFallback(EXECUTION_MODE.JTP);
+
+        }
+
+        System.out.println("Depth is " + max_possible_depth + " and abstraction is " + levels_of_divergence);
+
         if (LEVELS_OF_DIVERGENCE <= 1)
         {
             this.range = Range.create(MAX_SIZE_MOVES);
@@ -96,6 +149,8 @@ public class HogBotGPUKernel extends Kernel {
         {
             this.range = Range.create3D(MAX_SIZE_MOVES, MAX_SIZE_MOVES, MAX_SIZE_MOVES);
         }
+
+
 
 
         int localSize = range.getLocalSize(0) * range.getLocalSize(1) * range.getLocalSize(2);
@@ -179,28 +234,20 @@ public class HogBotGPUKernel extends Kernel {
 
 
 
-    public final int boardsToSolve;
 
-    final int MAX_POSSIBLE_HEIGHT = 12;
-
-    final int MAX_POSSIBLE_WIDTH = 6;
-
-    final int MAX_SIZE_MOVES = (MAX_POSSIBLE_WIDTH - 1) * MAX_POSSIBLE_HEIGHT;
 
 
 
     public final Range range;
+
+
 
     /**
      * Max possible depth the instance will go to.
      */
 
 
-    final int STACK_SPACE_FOR_EACH_LEVEL = 2;
 
-    final int STACK_SIZE = MAX_POSSIBLE_DEPTH * STACK_SPACE_FOR_EACH_LEVEL;
-
-    final int BOARD_SIZE = MAX_POSSIBLE_HEIGHT * MAX_POSSIBLE_WIDTH;
 
     //Piece Arrays to use for GPU threads
     protected final byte[] originalPieces;

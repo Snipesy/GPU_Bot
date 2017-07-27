@@ -17,6 +17,8 @@
 
 package awesome.sauce
 
+import com.aparapi.device.Device
+import com.aparapi.device.OpenCLDevice
 import kotlinx.coroutines.experimental.delay
 import org.jnativehook.mouse.NativeMouseEvent
 import java.awt.*
@@ -35,11 +37,11 @@ import org.jnativehook.GlobalScreen
 /**
  * The bulk of the actual 'bot', as in mouse movents, clicking, is done here.
  */
-class RoboHog : Board, NativeMouseInputListener
+class RoboHog(abstraction: Int, depth: Int, device: OpenCLDevice?) : Board, NativeMouseInputListener
 
 {
 
-    val bot = HogBotGPU()
+    val bot = HogBotGPU(abstraction,depth,device)
     val windowReds = intArrayOf(69, 69,209, 86, 23)
     val windowGreens = intArrayOf(39, 39,198, 39, 104)
     val windowBlues = intArrayOf(12, 12,133, 11, 135)

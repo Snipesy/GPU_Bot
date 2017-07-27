@@ -17,6 +17,7 @@
 
 package awesome.sauce
 
+import com.aparapi.device.OpenCLDevice
 import kotlinx.coroutines.experimental.CancellationException
 import kotlinx.coroutines.experimental.delay
 
@@ -26,9 +27,9 @@ import kotlinx.coroutines.experimental.delay
  * Also manages update sback to the GUI.
  */
 object MainClient {
-    suspend fun main(cb: ClientCallbackListener) {
+    suspend fun main(cb: ClientCallbackListener, abstraction: Int, depth: Int, device: OpenCLDevice?) {
 
-        val robo = RoboHog()
+        val robo = RoboHog(abstraction, depth, device)
 
         try {
             cb.statusUpdate("Running. Searching for client.")
