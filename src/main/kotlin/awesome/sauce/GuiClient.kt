@@ -52,7 +52,7 @@ class GuiClient : ClientCallbackListener, NativeKeyListener {
 
     var gpu_depth_options = arrayOf("1", "2", "3", "4", "5")
 
-    var gpu_abstraction_layers = arrayOf("1", "2")
+    var gpu_abstraction_layers = arrayOf("1", "2", "3")
 
     var botJob: Job? = null
 
@@ -106,9 +106,9 @@ class GuiClient : ClientCallbackListener, NativeKeyListener {
 
         devMap.add("CPU (JTP)")
 
-        abstractionLayers.selectedIndex = 1
+        abstractionLayers.selectedIndex = 2
 
-        abstractionLayers2.selectedIndex = 2
+        abstractionLayers2.selectedIndex = 1
 
         val initialDevice = 0
 

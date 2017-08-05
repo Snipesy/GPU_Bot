@@ -77,6 +77,7 @@ class RoboHog(abstraction: Int, depth: Int, device: OpenCLDevice?) : Board, Nati
     fun parsePieces(): Boolean
     {
         listOfSpecialPieces.clear()
+        waterHeight = 0
         for (y in 0 until MAX_HEIGHT) {
 
             for (x in 0 until MAX_WIDTH) {
@@ -119,7 +120,11 @@ class RoboHog(abstraction: Int, depth: Int, device: OpenCLDevice?) : Board, Nati
         for (i in 0 until piecesBilged.size){
             if (piecesBilged[i].equals(listOfGridColors[y][x]))
             {
-                return i;
+                if (y > waterHeight)
+                {
+                    waterHeight = y;
+                }
+                return i
             }
         }
 
@@ -200,9 +205,8 @@ class RoboHog(abstraction: Int, depth: Int, device: OpenCLDevice?) : Board, Nati
 
     private suspend fun executeMove(move: HogBotGPUKernel.HighLevelResult)
     {
-        if (move.score < 7f && listOfSpecialPieces.isNotEmpty())
+        if (move.score < 2f && listOfSpecialPieces.isNotEmpty())
         {
-
             executeSwap(listOfSpecialPieces[0].x,listOfSpecialPieces[0].y)
         }
         else
@@ -297,8 +301,16 @@ class RoboHog(abstraction: Int, depth: Int, device: OpenCLDevice?) : Board, Nati
         robo.mousePress(InputEvent.BUTTON1_MASK)
         robo.mouseRelease(InputEvent.BUTTON1_MASK)
 
+        if (y - 1 > waterHeight)
+        {
+            delay(rand.nextInt(150-(100)+1)+100.toLong())
+        }
+        else
+        {
+            delay(rand.nextInt(350-(300)+1)+300.toLong())
+        }
 
-        delay(rand.nextInt(250-(200)+1)+200.toLong())
+
 
         return true
 
@@ -306,9 +318,9 @@ class RoboHog(abstraction: Int, depth: Int, device: OpenCLDevice?) : Board, Nati
 
     suspend fun slideTo(xPos: Int, yPos: Int): Boolean
     {
-        return mouseGlide(currentMouseX, currentMouseY, xPos, yPos, (rand.nextInt(700-500)+1)+500, 40)
-
+        return mouseGlide(currentMouseX, currentMouseY, xPos, yPos, (rand.nextInt(600-400)+1)+400, 40)
     }
+
 
     suspend fun slideToFast(xPos: Int, yPos: Int): Boolean
     {
@@ -363,6 +375,7 @@ class RoboHog(abstraction: Int, depth: Int, device: OpenCLDevice?) : Board, Nati
 
             val startAngle = Math.atan2(y1-centerY, x1-centerX )
             val endAngle = Math.atan2(y2-centerY, x2-centerX )
+
 
 
 
@@ -481,6 +494,12 @@ class RoboHog(abstraction: Int, depth: Int, device: OpenCLDevice?) : Board, Nati
     {
         GlobalScreen.removeNativeMouseMotionListener(this)
         bot.destroy()
+    }
+
+    var waterHeight: Int = 0
+
+    override fun getWaterLevel(): Int {
+        return waterHeight
     }
 
 

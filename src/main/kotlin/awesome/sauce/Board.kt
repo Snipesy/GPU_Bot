@@ -24,4 +24,6 @@ interface Board {
 
     fun getPiece(x: Int, y: Int): Int
 
+    fun getWaterLevel(): Int
+
 }

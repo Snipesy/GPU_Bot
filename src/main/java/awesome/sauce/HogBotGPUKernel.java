@@ -52,7 +52,7 @@ import java.util.LinkedHashSet;
  *
  * This means some code needs to be written which will take a board, and do all the necessary swaps to make it turn into the board post-break.
  * And it needs to be done without drastically decreasing performance.
- *
+ *+
  *
  */
 public class HogBotGPUKernel extends Kernel {
@@ -82,6 +82,8 @@ public class HogBotGPUKernel extends Kernel {
     int STACK_SIZE = MAX_POSSIBLE_DEPTH * STACK_SPACE_FOR_EACH_LEVEL;
 
     final int BOARD_SIZE = MAX_POSSIBLE_HEIGHT * MAX_POSSIBLE_WIDTH;
+
+    private static final int EMPTY_PIECE = 27;
 
 
 
@@ -164,6 +166,8 @@ public class HogBotGPUKernel extends Kernel {
 
         this.poolOfBestMoveMoves = new byte[boardsToSolve];
 
+        this.poolOfBestMoveMovesToFirst = new byte[boardsToSolve];
+
 
         // Arg localStack to emulate recursion in the GPU (it's shallow, so it's fine).
         this.localStack = new byte[localSize * STACK_SIZE];
@@ -173,6 +177,8 @@ public class HogBotGPUKernel extends Kernel {
         this.localyConstraintBuffer = new byte[localSize * MAX_POSSIBLE_DEPTH * 2];
 
         this.localPiecesBuffer = new byte[localSize * BOARD_SIZE];
+
+
 
 
 
@@ -187,8 +193,16 @@ public class HogBotGPUKernel extends Kernel {
     {
         public int moves = 0;
         public float score = 0f;
+        public int movesToFirst = 0;
 
         public ArrayList<HogBotLib.Coordinate> moveInfo = new ArrayList<>();
+
+        public float getAdjustedScore(int movesLeadingToThis)
+        {
+            float scoreWithoutMoves = score * moves;
+
+            return scoreWithoutMoves / (moves + movesLeadingToThis);
+        }
     }
 
     public HighLevelResult getHighLevelResult(int N)
@@ -196,6 +210,7 @@ public class HogBotGPUKernel extends Kernel {
         HighLevelResult result = new HighLevelResult();
         result.score = poolOfBestMoveScore[N];
         result.moves = poolOfBestMoveMoves[N];
+        result.movesToFirst = poolOfBestMoveMovesToFirst[N];
 
 
         for (int i = 0; i < result.moves; i++)
@@ -253,11 +268,15 @@ public class HogBotGPUKernel extends Kernel {
     //Piece Arrays to use for GPU threads
     protected final byte[] originalPieces;
 
+    public byte waterLevel = 0;
+
     public final float[] poolOfBestMoveScore;
 
     protected final byte[] poolOfBestMoveInfo;
 
     public final byte[] poolOfBestMoveMoves;
+
+    public final byte[] poolOfBestMoveMovesToFirst;
 
 
 
@@ -270,6 +289,8 @@ public class HogBotGPUKernel extends Kernel {
     @Local final byte[] localyConstraintBuffer;
 
     @Local final byte[] localPiecesBuffer;
+
+
 
 
 
@@ -297,7 +318,7 @@ public class HogBotGPUKernel extends Kernel {
         }
         else
         {
-            return (getGlobalId(2)*getGlobalSize(1)*getLocalSize(0) + getGlobalId(1)*getGlobalSize(0) + getGlobalId(0));
+            return (getGlobalId(2)*getGlobalSize(1)*getGlobalSize(0) + getGlobalId(1)*getGlobalSize(0) + getGlobalId(0));
         }
     }
 
@@ -347,7 +368,6 @@ public class HogBotGPUKernel extends Kernel {
 
         if (!divide(N,P))
         {
-
             return;
         }
 
@@ -380,6 +400,7 @@ public class HogBotGPUKernel extends Kernel {
         localstackSize[P] = 0;
         poolOfBestMoveMoves[N] = 0;
         poolOfBestMoveScore[N] = 0f;
+        poolOfBestMoveMovesToFirst[N] = 0;
     }
 
 
@@ -453,7 +474,7 @@ public class HogBotGPUKernel extends Kernel {
     private boolean divideStep(int N, int P, int x, int y, byte moves)
     {
         // Should we even attempt?
-        if (canSwap(elementAt(P,x,y), elementAt(P,x+1,y)) && liesInConstraint(P,x,y,0))
+        if (canSwap(elementAt(P,x,y), elementAt(P,x+1,y)))
         {
             // Do the swap
             performSwap(P,x,y);
@@ -468,12 +489,55 @@ public class HogBotGPUKernel extends Kernel {
                 poolOfBestMoveScore[N] = swapRank/(float)moves;
                 poolOfBestMoveMoves[N] = moves;
 
-                return true;
+                if (poolOfBestMoveMovesToFirst[N] == 0)
+                    poolOfBestMoveMovesToFirst[N] = moves;
+
+                // Reset constraint since its pretty much a new board.
+                initialiseConstraint(N,P);
+
+                // Solve board
+
+                breakIntoCheckAll(P,x,y);
             }
+        }
+        else if (isJellyFish(elementAt(P,x,y)) && isValidPiece(elementAt(P,x+1,y)))
+        {
+            if (poolOfBestMoveMovesToFirst[N] == 0)
+                poolOfBestMoveMovesToFirst[N] = moves;
+            // Jelly Logic, jelly is on the left
+            initialiseConstraint(N,P);
+            jellyIntoCheckAll(P,x,y, false);
+
+        }
+        else if (isJellyFish(elementAt(P,x+1,y)) && isValidPiece(elementAt(P,x,y)))
+        {
+            if (poolOfBestMoveMovesToFirst[N] == 0)
+                poolOfBestMoveMovesToFirst[N] = moves;
+            // Jelly Logic, jelly is on the right
+            initialiseConstraint(N,P);
+            jellyIntoCheckAll(P,x,y, true);
+
+        }
+        else if (isPufferFish(elementAt(P, x,y)) && isValidPiece(elementAt(P,x+1,y)) )
+        {
+            if (poolOfBestMoveMovesToFirst[N] == 0)
+                poolOfBestMoveMovesToFirst[N] = moves;
+            // Puffer Logic, Puffer is on the left
+            initialiseConstraint(N,P);
+            pufferIntoCheckAll(P,x,y, false);
+        }
+        else if (isPufferFish(elementAt(P, x+1,y)) && isValidPiece(elementAt(P,x,y)) )
+        {
+            if (poolOfBestMoveMovesToFirst[N] == 0)
+                poolOfBestMoveMovesToFirst[N] = moves;
+            // Puffer Logic, Puffer is on the right
+            initialiseConstraint(N,P);
+            pufferIntoCheckAll(P,x,y, true);
         }
         else
         {
             //System.out.println(x + " " + y + " swap fail");
+            // Crab, empty piece, or something like that. Whatever it is were done here this is an invalid combo.
             return true;
         }
 
@@ -940,7 +1004,6 @@ public class HogBotGPUKernel extends Kernel {
 
         int yOffset = 1;
 
-
         while (y+yOffset < MAX_POSSIBLE_HEIGHT && yOffset < 3)
         {
             if (elementAt(P,x,y+yOffset) == startElement)
@@ -952,6 +1015,8 @@ public class HogBotGPUKernel extends Kernel {
                 break;
             }
         }
+
+
 
         return (yOffset-1);
     }
@@ -989,6 +1054,100 @@ public class HogBotGPUKernel extends Kernel {
         int counts = 0;
 
         while (x+xOffset < MAX_POSSIBLE_WIDTH && xOffset < 3)
+        {
+            if (elementAt(P,x+xOffset,y)  == startElement)
+            {
+                counts++;
+                xOffset++;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        return counts;
+    }
+
+    private int retrievePiecesBelowAlt(int P, int x, int y)
+    {
+        int startElement = elementAt(P,x,y);
+
+        int yOffset = 1;
+
+
+        while (y-yOffset >= 0)
+        {
+            if (elementAt(P,x,y-yOffset) == startElement)
+            {
+                yOffset++;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        return (yOffset-1);
+    }
+
+
+    private int retrievePiecesAboveAlt(int P, int x, int y)
+    {
+        int startElement = elementAt(P,x,y);
+
+        int yOffset = 1;
+
+        while (y+yOffset < MAX_POSSIBLE_HEIGHT)
+        {
+            if (elementAt(P,x,y+yOffset) == startElement)
+            {
+                yOffset++;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+
+
+        return (yOffset-1);
+    }
+
+    private int retrievePiecesLeftAlt(int P, int x, int y)
+    {
+        int startElement = elementAt(P,x,y);
+
+        int xOffset = 1;
+
+        int counts = 0;
+
+        while (x-xOffset >= 0)
+        {
+            if (elementAt(P,x-xOffset,y) == startElement)
+            {
+                counts++;
+                xOffset++;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        return counts;
+    }
+
+    private int retrievePiecesRightAlt(int P, int x, int y)
+    {
+        int startElement = elementAt(P,x,y);
+
+        int xOffset = 1;
+
+        int counts = 0;
+
+        while (x+xOffset < MAX_POSSIBLE_WIDTH)
         {
             if (elementAt(P,x+xOffset,y)  == startElement)
             {
@@ -1065,12 +1224,342 @@ public class HogBotGPUKernel extends Kernel {
 
         // False if one of the pieces is not between 0 and 6.
         // Anything higher is a special, jelly, etc.
-        if (left > 6)
-            return false;
-        if (right > 6)
-            return false;
+        if (isValidPiece(left) && isValidPiece(right))
+            return true;
 
-        return true;
+        return false;
+    }
+
+    private boolean isValidPiece(int index)
+    {
+        if (index > 6)
+            return false;
+        else
+            return true;
+    }
+
+    private boolean isCrab(int index)
+    {
+        return index == 8;
+    }
+
+    private boolean isJellyFish(int index)
+    {
+        return index == 9;
+    }
+
+    private boolean isPufferFish(int index)
+    {
+        return index == 7;
+    }
+
+
+    /**
+     * Board solution logic
+     */
+
+
+    /**
+     * Skips looping over entire board. More efficient.
+     * @param P - P index
+     * @param x - swap source x
+     * @param y - swap source y
+     * @return number of steps (breaks)
+     */
+    private int breakIntoCheckAll(int P, int x, int y)
+    {
+        //@TODO actaully make it more efficient.
+
+        return checkToAllBreaks(P);
+
+    }
+
+    private int jellyIntoCheckAll(int P, int x, int y, boolean rightSide)
+    {
+        // Jelly is on the right
+        if (rightSide)
+        {
+            destroyAllOfElement(P, elementAt(P,x,y));
+            encodeSourcePiece(P,x+1,y,EMPTY_PIECE);
+        }
+        else // Jelly is on the left
+        {
+            destroyAllOfElement(P, elementAt(P,x+1,y));
+            encodeSourcePiece(P,x,y,EMPTY_PIECE);
+        }
+
+        stepForward(P);
+
+        return checkToAllBreaks(P) + 1;
+    }
+
+    private int pufferIntoCheckAll(int P, int x, int y, boolean rightSide)
+    {
+        if (rightSide)
+            huffAt(P,x+1,y);
+        else
+            huffAt(P, x,y);
+
+        stepForward(P);
+
+        return checkToAllBreaks(P) + 1;
+    }
+
+    private void huffAt(int P, int x, int y)
+    {
+
+        for (int xOffset = 0; xOffset < 3; xOffset++)
+        {
+            for (int yOffset = 0; yOffset < 3; yOffset++)
+            {
+                int iX = x-1+xOffset;
+                int iY = y-1+yOffset;
+
+                if (iX >= 0 && iX < MAX_POSSIBLE_WIDTH && iY >= 0 && iY < MAX_POSSIBLE_HEIGHT)
+                {
+                    encodeSourcePiece(P,iX,iY,EMPTY_PIECE);
+                }
+
+            }
+        }
+    }
+
+    private void destroyAllOfElement(int P, int element)
+    {
+        for (int x = 0; x < MAX_POSSIBLE_WIDTH-1; x++)
+        {
+            for (int y = 0; y < MAX_POSSIBLE_HEIGHT; y++)
+            {
+                if (elementAt(P,x,y) == element)
+                {
+                    encodeSourcePiece(P,x,y,EMPTY_PIECE);
+                }
+
+            }
+        }
+    }
+
+    /**
+     * Checks the board for solutions and swaps them with empty pieces if solved.
+     *
+     * @param P - P index
+     * @return - number of steps (breaks)
+     */
+    private int checkToAllBreaks(int P)
+    {
+
+        int steps = 0;
+        while (checkToBreak(P))
+        {
+            steps ++;
+        }
+
+
+        return steps;
+    }
+
+    /**
+     * Checks the board for solutions and swaps them with empty pieces if solved.
+     *
+     * @param P - P index
+     * @return - whether or not there was a break
+     */
+    private boolean checkToBreak(int P)
+    {
+        boolean broken = false;
+
+        for (int x = 0; x < MAX_POSSIBLE_WIDTH-1; x++)
+        {
+            for (int y = 0; y < MAX_POSSIBLE_HEIGHT; y++)
+            {
+                if (isValidPiece(elementAt(P,x,y)) && breakCheck(P, x, y))
+                {
+                    broken = true;
+                }
+
+
+            }
+        }
+
+        if (broken)
+            stepForward(P);
+
+        return broken;
+    }
+
+    private void stepForward(int P)
+    {
+        // Step board forward and check for crabs, step again if crabs
+        while (step(P) && crabCheck(P) > 0);
+    }
+
+    private void breakPufferfish(int P, int x, int y)
+    {
+        //@TODO
+    }
+
+    private int crabCheck(int P)
+    {
+        int crab_count = 0;
+        for (int x = 0; x < MAX_POSSIBLE_WIDTH-1; x++)
+        {
+            for (int y = waterLevel + 1; y < MAX_POSSIBLE_HEIGHT; y++)
+            {
+                if (isCrab(elementAt(P,x,y)))
+                {
+                    encodeSourcePiece(P,x,y, EMPTY_PIECE);
+                    crab_count++;
+                }
+
+            }
+        }
+        return crab_count;
+    }
+
+    private boolean breakCheck(int P, int x, int y)
+    {
+
+        boolean broke = false;
+
+
+        // Traverse around left piece.
+        int yRowA = retrievePiecesAboveAlt(P, x,y);
+        int yRowB = retrievePiecesBelowAlt(P, x,y);
+
+
+
+        int xRowL = retrievePiecesLeftAlt(P,x,y);
+        int xRowR = retrievePiecesRightAlt(P,x,y);
+
+
+        if (yRowA + yRowB > 1 || xRowL + xRowR > 1)
+        {
+            encodeSourcePiece(P, x,y, EMPTY_PIECE);
+            broke = true;
+
+        }
+
+        if (yRowA + yRowB >= 2)
+        {
+            breakUp(P,x,y,yRowA);
+            breakBelow(P,x,y,yRowB);
+        }
+
+        if (xRowL + xRowR >= 2)
+        {
+            breakRight(P,x,y,xRowR);
+            breakLeft(P,x,y,xRowL);
+        }
+
+        return broke;
+
+    }
+
+    private void breakLeft(int P, int x, int y, int counts)
+    {
+
+        int xOffset = 1;
+
+        while (x-xOffset >= 0 && xOffset <= counts)
+        {
+            encodeSourcePiece(P,x-xOffset,y, EMPTY_PIECE);
+            xOffset++;
+        }
+
+    }
+
+    private void breakRight(int P, int x, int y, int counts)
+    {
+
+        int xOffset = 1;
+
+        while (x+xOffset < MAX_POSSIBLE_WIDTH && xOffset <= counts)
+        {
+            encodeSourcePiece(P,x+xOffset,y, EMPTY_PIECE);
+            xOffset++;
+        }
+
+    }
+
+    private void breakBelow(int P, int x, int y, int counts)
+    {
+        int yOffset = 1;
+
+
+        while (y-yOffset >= 0 && yOffset <= counts)
+        {
+            encodeSourcePiece(P,x,y-yOffset, EMPTY_PIECE);
+            yOffset++;
+        }
+
+    }
+
+
+    private void breakUp(int P, int x, int y, int counts)
+    {
+
+        int yOffset = 1;
+
+
+        while (y+yOffset < MAX_POSSIBLE_HEIGHT && yOffset <= counts)
+        {
+            encodeSourcePiece(P,x,y+yOffset, EMPTY_PIECE);
+            yOffset++;
+        }
+
+    }
+
+    /**
+     * Steps the game forward, places all empty pieces at the bottom.
+     * @param P
+     * @return - whether or not there was a step
+     */
+    private boolean step(int P)
+    {
+        boolean step = false;
+        for (int x = 0; x < MAX_POSSIBLE_WIDTH; x++)
+        {
+            if (stepX(P, x))
+                step = true;
+        }
+        return step;
+    }
+
+    private boolean stepX(int P, int x)
+    {
+        boolean stepped = false;
+        int a = MAX_POSSIBLE_HEIGHT - 1;
+        int b = MAX_POSSIBLE_HEIGHT - 1;
+        while (a >= 0) {
+            int elm = elementAt(P,x,a);
+            if (elm != EMPTY_PIECE) {
+                encodeSourcePiece(P,x,b--,elm);
+            }
+            a--;
+        }
+        if (b >= 0)
+        {
+            stepped = true;
+            while (b >= 0) encodeSourcePiece(P,x,b--,EMPTY_PIECE);
+        }
+        return stepped;
+
+
+    }
+
+    private void logBoard(int P)
+    {
+        StringBuilder sb = new StringBuilder();
+        for (int y = MAX_POSSIBLE_HEIGHT-1; y >= 0; y--)
+        {
+            for (int x = 0; x < MAX_POSSIBLE_WIDTH; x++)
+            {
+                sb.append(decodeSourcePiece(P,x,y));
+                sb.append(" ");
+            }
+            System.out.println(y + ": " + sb.toString());
+            sb.setLength(0);
+        }
     }
 
 

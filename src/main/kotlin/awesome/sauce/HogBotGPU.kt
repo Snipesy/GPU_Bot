@@ -40,7 +40,7 @@ class HogBotGPU(abstraction: Int, depth: Int, device: OpenCLDevice?) {
 
     fun getReccomendation(board: Board): HogBotGPUKernel.HighLevelResult? {
 
-        divergeToGpu(board);
+        divergeToGpu(board)
 
 
         return latestMove;
@@ -77,6 +77,8 @@ class HogBotGPU(abstraction: Int, depth: Int, device: OpenCLDevice?) {
 
         }
 
+        kernel.waterLevel = board.getWaterLevel().toByte()
+
 
 
         var bestScore = 0f;
@@ -103,7 +105,15 @@ class HogBotGPU(abstraction: Int, depth: Int, device: OpenCLDevice?) {
 
             bestResultForThisPass = kernel.getHighLevelResult(bestIndex)
 
-            System.out.println("Best score found on pass $i is " + best + " at " + bestIndex + " with " + kernel.poolOfBestMoveMoves[bestIndex] + " moves")
+            val scoreForThisPass = (bestResultForThisPass.getAdjustedScore(
+                    if (bestResult.moves == 0)
+                        0
+                    else
+                        bestResult.moves-1
+            ))
+
+            System.out.println("Best score found on pass $i is " + best + "(" + scoreForThisPass + ")"
+                    + " at " + bestIndex + " with " + kernel.poolOfBestMoveMoves[bestIndex] + " moves")
 
             for ( n in 0 until bestResultForThisPass.moves)
             {
@@ -111,11 +121,11 @@ class HogBotGPU(abstraction: Int, depth: Int, device: OpenCLDevice?) {
             }
 
             //if ((bestResultForThisPass.score * bestResultForThisPass.moves) / (bestResult.moves + bestResultForThisPass.moves) > bestScore)
-            if ((bestResultForThisPass.score) > bestScore)
+
+            if (scoreForThisPass > bestScore + 0.1f)
             {
                 // This is better than what we had on the previous pass (if we had anything at all)
-
-                bestScore = (bestResultForThisPass.score)
+                bestScore = scoreForThisPass
 
                 // If we have some moves remove the last one
                 if (bestResult.moves > 0)
@@ -124,17 +134,36 @@ class HogBotGPU(abstraction: Int, depth: Int, device: OpenCLDevice?) {
                     bestResult.moves--
                 }
 
-                // Add and do up to the last move.
-                for (n in 0 until bestResultForThisPass.moveInfo.size-1)
+                if (bestResultForThisPass.movesToFirst > 0 && bestResultForThisPass.movesToFirst != bestResultForThisPass.moves)
                 {
-                    val thisMove = bestResultForThisPass.moveInfo[n]
-                    bestResult.moveInfo.add(thisMove)
-                    bestResult.moves++
+                    System.out.println("This move contains a preemptive break.")
+                    // Add and do up to the last move to the first
+                    for (n in 0 until bestResultForThisPass.movesToFirst)
+                    {
+                        val thisMove = bestResultForThisPass.moveInfo[n]
+                        bestResult.moveInfo.add(thisMove)
+                        bestResult.moves++
 
-                    // Perform swaps on kernel board
-                    kernel.performSwapOnSource(thisMove.x, thisMove.y)
+                    }
+                    // Break since done
+                    break
 
                 }
+                else
+                {
+                    // Add and do up to the last move.
+                    for (n in 0 until bestResultForThisPass.moveInfo.size-1)
+                    {
+                        val thisMove = bestResultForThisPass.moveInfo[n]
+                        bestResult.moveInfo.add(thisMove)
+                        bestResult.moves++
+
+                        // Perform swaps on kernel board
+                        kernel.performSwapOnSource(thisMove.x, thisMove.y)
+
+                    }
+                }
+
                 // Add last move
                 bestResult.moveInfo.add(bestResultForThisPass.moveInfo[bestResultForThisPass.moveInfo.size-1])
                 bestResult.moves++
@@ -149,12 +178,14 @@ class HogBotGPU(abstraction: Int, depth: Int, device: OpenCLDevice?) {
 
         }
 
+        bestResult.score = bestScore;
+
         // Finally add the last best move
 
 
 
 
-
+        System.out.println("--- Final Solution ---")
         for ( i in 0 until bestResult.moves)
         {
             System.out.println("Move $i: " + bestResult.moveInfo[i].x + " " + bestResult.moveInfo[i].y)
